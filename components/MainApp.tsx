@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import NotesView from './NotesView';
 import ChatView from './ChatView';
@@ -6,25 +7,24 @@ import type { Space } from '../types';
 import { MOCK_SPACES } from '../data/mockData';
 import ChevronDownIcon from './icons/ChevronDownIcon';
 import SettingsIcon from './icons/SettingsIcon';
-import SettingsPanel from './SettingsPanel';
+import SettingsView from './SettingsView';
 import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import MenuIcon from './icons/MenuIcon';
 import CheckIcon from './icons/CheckIcon';
+import XIcon from './icons/XIcon';
 
 type View = 'notes' | 'chat';
+type Screen = 'main' | 'settings';
 
 const MainApp: React.FC = () => {
   const [activeView, setActiveView] = useState<View>('notes');
+  const [currentScreen, setCurrentScreen] = useState<Screen>('main');
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSpaceSelectorOpen, setIsSpaceSelectorOpen] = useState(false);
 
-  const settingsRef = useRef<HTMLDivElement>(null);
   const spaceSelectorRef = useRef<HTMLDivElement>(null);
-
-  useOnClickOutside(settingsRef, () => setIsSettingsOpen(false));
   useOnClickOutside(spaceSelectorRef, () => setIsSpaceSelectorOpen(false));
 
 
@@ -73,17 +73,21 @@ const MainApp: React.FC = () => {
       return colors[Math.abs(hash) % colors.length];
   };
 
+  if (currentScreen === 'settings') {
+    return <SettingsView onBack={() => setCurrentScreen('main')} />;
+  }
+
   return (
     <div className="w-full h-screen flex flex-col bg-background text-text-primary">
       <header className="flex justify-between items-center p-2 md:p-4 bg-background border-b border-border sticky top-0 z-20 space-x-2 md:space-x-4">
         <div className="flex-1 flex justify-start">
             {activeView === 'chat' && (
                 <button 
-                    onClick={() => setIsSidebarOpen(true)}
-                    className="p-2 rounded-full hover:bg-ui-hover-background transition-colors duration-200 md:hidden"
-                    aria-label="Open sidebar"
+                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    className="p-2 rounded-full hover:bg-ui-hover-background transition-colors duration-200 md:hidden z-50"
+                    aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
                 >
-                    <MenuIcon />
+                    {isSidebarOpen ? <XIcon className="h-6 w-6" /> : <MenuIcon />}
                 </button>
             )}
         </div>
@@ -148,15 +152,14 @@ const MainApp: React.FC = () => {
                 )}
             </div>
 
-            <div ref={settingsRef} className="relative">
+            <div className="relative">
                 <button 
-                    onClick={() => setIsSettingsOpen(!isSettingsOpen)} 
+                    onClick={() => setCurrentScreen('settings')} 
                     className="p-2 rounded-full hover:bg-ui-hover-background transition-colors duration-200"
                     aria-label="Open settings"
                 >
                     <SettingsIcon />
                 </button>
-                <SettingsPanel isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
             </div>
         </div>
       </header>

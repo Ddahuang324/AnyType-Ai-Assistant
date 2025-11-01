@@ -1,28 +1,39 @@
-
 import React, { createContext, useState, useEffect } from 'react';
 
 type Theme = 'light' | 'dark';
+export type AiProvider = 'gemini' | 'openai' | 'anthropic' | '';
+
 
 interface SettingsContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
-  geminiApiKey: string;
-  setGeminiApiKey: (key: string) => void;
+  aiProvider: AiProvider,
+  setAiProvider: (provider: AiProvider) => void;
+  aiApiKey: string;
+  setAiApiKey: (key: string) => void;
+  aiModel: string;
+  setAiModel: (model: string) => void;
   anytypeApiKey: string;
   setAnytypeApiKey: (key: string) => void;
   anytypeApiEndpoint: string;
   setAnytypeApiEndpoint: (url: string) => void;
+  resetConfiguration: () => void;
 }
 
 export const SettingsContext = createContext<SettingsContextType>({
   theme: 'light',
   setTheme: () => {},
-  geminiApiKey: '',
-  setGeminiApiKey: () => {},
+  aiProvider: '',
+  setAiProvider: () => {},
+  aiApiKey: '',
+  setAiApiKey: () => {},
+  aiModel: '',
+  setAiModel: () => {},
   anytypeApiKey: '',
   setAnytypeApiKey: () => {},
   anytypeApiEndpoint: '',
   setAnytypeApiEndpoint: () => {},
+  resetConfiguration: () => {},
 });
 
 interface SettingsProviderProps {
@@ -31,7 +42,9 @@ interface SettingsProviderProps {
 
 export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>('light');
-  const [geminiApiKey, setGeminiApiKeyState] = useState<string>('');
+  const [aiProvider, setAiProviderState] = useState<AiProvider>('');
+  const [aiApiKey, setAiApiKeyState] = useState<string>('');
+  const [aiModel, setAiModelState] = useState<string>('');
   const [anytypeApiKey, setAnytypeApiKeyState] = useState<string>('');
   const [anytypeApiEndpoint, setAnytypeApiEndpointState] = useState<string>('');
 
@@ -41,19 +54,15 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     if (savedTheme) {
       setThemeState(savedTheme);
     } else {
-        // Set theme based on system preference if no theme is saved
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         setThemeState(prefersDark ? 'dark' : 'light');
     }
     
-    const savedGeminiKey = localStorage.getItem('anytype-gemini-key');
-    if (savedGeminiKey) setGeminiApiKeyState(savedGeminiKey);
-
-    const savedAnytypeKey = localStorage.getItem('anytype-anytype-key');
-    if (savedAnytypeKey) setAnytypeApiKeyState(savedAnytypeKey);
-
-    const savedAnytypeEndpoint = localStorage.getItem('anytype-anytype-endpoint');
-    if (savedAnytypeEndpoint) setAnytypeApiEndpointState(savedAnytypeEndpoint);
+    setAiProviderState(localStorage.getItem('anytype-ai-provider') as AiProvider || '');
+    setAiApiKeyState(localStorage.getItem('anytype-ai-key') || '');
+    setAiModelState(localStorage.getItem('anytype-ai-model') || '');
+    setAnytypeApiKeyState(localStorage.getItem('anytype-anytype-key') || '');
+    setAnytypeApiEndpointState(localStorage.getItem('anytype-anytype-endpoint') || '');
 
   }, []);
 
@@ -62,9 +71,19 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     localStorage.setItem('anytype-theme', newTheme);
   };
 
-  const setGeminiApiKey = (key: string) => {
-    setGeminiApiKeyState(key);
-    localStorage.setItem('anytype-gemini-key', key);
+  const setAiProvider = (provider: AiProvider) => {
+    setAiProviderState(provider);
+    localStorage.setItem('anytype-ai-provider', provider);
+  }
+
+  const setAiApiKey = (key: string) => {
+    setAiApiKeyState(key);
+    localStorage.setItem('anytype-ai-key', key);
+  }
+
+  const setAiModel = (model: string) => {
+    setAiModelState(model);
+    localStorage.setItem('anytype-ai-model', model);
   }
 
   const setAnytypeApiKey = (key: string) => {
@@ -77,9 +96,25 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     localStorage.setItem('anytype-anytype-endpoint', url);
   }
 
+  const resetConfiguration = () => {
+    // Clear state
+    setAiProviderState('');
+    setAiApiKeyState('');
+    setAiModelState('');
+    setAnytypeApiKeyState('');
+    setAnytypeApiEndpointState('');
+    // Clear localStorage
+    localStorage.removeItem('anytype-ai-provider');
+    localStorage.removeItem('anytype-ai-key');
+    localStorage.removeItem('anytype-ai-model');
+    localStorage.removeItem('anytype-anytype-key');
+    localStorage.removeItem('anytype-anytype-endpoint');
+    localStorage.removeItem('anytype-setup-complete');
+  }
+
 
   return (
-    <SettingsContext.Provider value={{ theme, setTheme, geminiApiKey, setGeminiApiKey, anytypeApiKey, setAnytypeApiKey, anytypeApiEndpoint, setAnytypeApiEndpoint }}>
+    <SettingsContext.Provider value={{ theme, setTheme, aiProvider, setAiProvider, aiApiKey, setAiApiKey, aiModel, setAiModel, anytypeApiKey, setAnytypeApiKey, anytypeApiEndpoint, setAnytypeApiEndpoint, resetConfiguration }}>
       {children}
     </SettingsContext.Provider>
   );

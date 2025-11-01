@@ -1,7 +1,7 @@
-
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useContext } from 'react';
 import type { Message, ChatHistoryItem, Blueprint, Space, AnyObject } from '../types';
-import { continueConversation, generateChatTitle } from '../services/geminiService';
+import { continueConversation, generateChatTitle } from '../services/aiService';
+import type { AiProvider } from '../services/aiService';
 import * as historyService from '../services/historyService';
 import * as blueprintService from '../services/blueprintService';
 import SendIcon from './icons/SendIcon';
@@ -10,9 +10,10 @@ import TrashIcon from './icons/TrashIcon';
 import PencilIcon from './icons/PencilIcon';
 import BlueprintModal from './BlueprintModal';
 import ChevronDownIcon from './icons/ChevronDownIcon';
-import BlueprintIcon from './icons/BlueprintIcon';
 import ObjectSelectorModal from './ObjectSelectorModal';
 import XIcon from './icons/XIcon';
+import { SettingsContext } from '../contexts/SettingsContext';
+import ChatMessages from './ChatMessages';
 
 interface ChatViewProps {
     space: Space | null;
@@ -38,6 +39,8 @@ const ChatView: React.FC<ChatViewProps> = ({ space, isSidebarOpen, setIsSidebarO
   const [blueprintToEdit, setBlueprintToEdit] = useState<Blueprint | null>(null);
   const [selectedObjects, setSelectedObjects] = useState<AnyObject[]>([]);
 
+  const { aiProvider, aiApiKey, aiModel } = useContext(SettingsContext);
+  const isAiConfigured = !!(aiProvider && aiApiKey && aiModel);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -115,7 +118,7 @@ const ChatView: React.FC<ChatViewProps> = ({ space, isSidebarOpen, setIsSidebarO
   };
 
   const handleSendMessage = async (messageText: string) => {
-    if (!messageText.trim() || isLoading) return;
+    if (!messageText.trim() || isLoading || !isAiConfigured) return;
 
     const userInput = messageText;
     const contextPrefix = selectedObjects.length > 0
@@ -136,7 +139,7 @@ const ChatView: React.FC<ChatViewProps> = ({ space, isSidebarOpen, setIsSidebarO
     let chatToSave: ChatHistoryItem;
 
     if (!currentChatId) {
-      const title = await generateChatTitle(userInput);
+      const title = await generateChatTitle(aiProvider as AiProvider, aiApiKey, aiModel, userInput);
       const newChat: ChatHistoryItem = {
         id: Date.now().toString(),
         title: title || "New Conversation",
@@ -157,7 +160,7 @@ const ChatView: React.FC<ChatViewProps> = ({ space, isSidebarOpen, setIsSidebarO
     }
     
     try {
-      const responseText = await continueConversation(conversationHistoryForAPI, messageWithContext);
+      const responseText = await continueConversation(aiProvider as AiProvider, aiApiKey, aiModel, conversationHistoryForAPI, messageWithContext);
       const modelMessage: Message = { id: (Date.now() + 1).toString(), role: 'model', text: responseText };
       
       setMessages(prev => [...prev, modelMessage]);
@@ -209,86 +212,6 @@ const ChatView: React.FC<ChatViewProps> = ({ space, isSidebarOpen, setIsSidebarO
   const handleOpenCreateModal = () => {
     setBlueprintToEdit(null);
     setIsBlueprintModalOpen(true);
-  };
-
-  // --- MAIN CONTENT RENDERER ---
-  const MainContent = () => {
-    if (activeChatId) {
-      return (
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex animate-fade-in-up ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-3 rounded-2xl ${
-                  msg.role === 'user'
-                    ? 'bg-brand-primary text-white rounded-br-none'
-                    : 'bg-ui-hover-background text-text-primary rounded-bl-none'
-                }`}
-              >
-                <p className="text-sm break-words whitespace-pre-wrap">{msg.text}</p>
-              </div>
-            </div>
-          ))}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="px-4 py-3 rounded-2xl bg-ui-hover-background text-text-primary rounded-bl-none">
-                <div className="flex items-center space-x-2">
-                  <span className="h-2 w-2 bg-text-secondary rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                  <span className="h-2 w-2 bg-text-secondary rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                  <span className="h-2 w-2 bg-text-secondary rounded-full animate-bounce"></span>
-                </div>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-      );
-    }
-
-    if (activeBlueprintId) {
-      const blueprint = blueprints.find(p => p.id === activeBlueprintId);
-      const relatedChats = chatHistory.filter(c => c.blueprintId === activeBlueprintId);
-      if (!blueprint) return null;
-
-      return (
-        <div className="flex-1 w-full flex flex-col items-center justify-center p-4 md:p-8 bg-background">
-          <div className="text-center max-w-2xl">
-            <div className="inline-flex items-center justify-center bg-brand-primary p-4 rounded-full mb-4">
-                <BlueprintIcon />
-            </div>
-            <h1 className="text-3xl md:text-4xl font-bold text-text-primary">{blueprint.title}</h1>
-            <p className="text-text-secondary mt-2 mb-8">{blueprint.prompt}</p>
-
-            {relatedChats.length > 0 && (
-                <div className="text-left w-full">
-                    <h3 className="font-semibold text-text-secondary mb-2">Recent</h3>
-                    <ul className="space-y-2">
-                        {relatedChats.slice(0, 3).map(chat => (
-                            <li key={chat.id}>
-                                <button onClick={() => handleSelectChat(chat.id)} className="w-full text-left p-3 bg-ui-background hover:bg-ui-hover-background rounded-lg transition-colors">
-                                    <p className="truncate text-sm text-text-primary">{chat.title}</p>
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex-1 w-full flex flex-col items-center justify-center p-4 md:p-8 bg-background">
-        <div className="text-center">
-          <h1 className="text-3xl md:text-4xl font-bold text-text-primary">AI Assistant</h1>
-          <p className="text-text-secondary mt-2">Select a chat, start a new one, or use a blueprint from the sidebar.</p>
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -384,7 +307,16 @@ const ChatView: React.FC<ChatViewProps> = ({ space, isSidebarOpen, setIsSidebarO
       </aside>
 
       <main className="flex-1 flex flex-col bg-background">
-        <MainContent />
+        <ChatMessages
+            messages={messages}
+            isLoading={isLoading}
+            activeChatId={activeChatId}
+            activeBlueprintId={activeBlueprintId}
+            blueprints={blueprints}
+            chatHistory={chatHistory}
+            onSelectChat={handleSelectChat}
+            messagesEndRef={messagesEndRef}
+        />
         <div className="p-4 border-t border-border bg-background">
             {selectedObjects.length > 0 && (
                 <div className="mb-2 p-2 border border-border rounded-lg bg-ui-background">
@@ -416,13 +348,13 @@ const ChatView: React.FC<ChatViewProps> = ({ space, isSidebarOpen, setIsSidebarO
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={activeBlueprintId ? blueprints.find(p=>p.id === activeBlueprintId)?.title || "Start conversation..." : "Ask me anything..."}
+              placeholder={!isAiConfigured ? "Please configure AI in settings..." : (activeBlueprintId ? blueprints.find(p=>p.id === activeBlueprintId)?.title || "Start conversation..." : "Ask me anything...")}
               className="flex-1 p-3 border border-border rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all duration-300 ease-in-out bg-ui-background text-text-primary placeholder:text-text-secondary"
-              disabled={isLoading}
+              disabled={isLoading || !isAiConfigured}
             />
             <button
               type="submit"
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || !input.trim() || !isAiConfigured}
               className="p-3 bg-brand-primary text-white rounded-lg transition-all duration-300 ease-in-out
                        transform hover:scale-105 disabled:bg-ui-hover-background disabled:scale-100"
             >
