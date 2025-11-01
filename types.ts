@@ -53,4 +53,11 @@ export interface ChatHistoryItem {
   id:string;
   title: string;
   messages: Message[];
+  blueprintId?: string; // Link to the blueprint that started this chat
+}
+
+export interface Blueprint {
+  id: string;
+  title: string;
+  prompt: string;
 }
