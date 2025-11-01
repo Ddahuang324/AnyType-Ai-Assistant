@@ -62,3 +62,41 @@ export interface Blueprint {
   title: string;
   prompt: string;
 }
+
+// Anytype API Response Types
+export interface AnytypeSpaceResponse {
+  id: string;
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+  members_count?: number;
+}
+
+export interface AnytypeObjectResponse {
+  id: string;
+  name: string;
+  type?: string;
+  created_at?: string;
+  updated_at?: string;
+  properties?: Record<string, any>;
+  body?: string;
+}
+
+export interface AnytypeObjectsListResponse {
+  objects?: AnytypeObjectResponse[];
+  spaces?: AnytypeSpaceResponse[];
+}
+
+// MCP Command Types for AI Translation
+export interface McpCommand {
+  action: 'CREATE_OBJECT' | 'UPDATE_OBJECT' | 'DELETE_OBJECT' | 'ADD_RELATION' | 'SEARCH_OBJECTS' | 'LIST_OBJECTS' | 'GET_OBJECT';
+  parameters: Record<string, any>;
+  description: string;
+}
+
+export interface TranslationResult {
+  success: boolean;
+  command?: McpCommand;
+  error?: string;
+  rawResponse?: string;
+}

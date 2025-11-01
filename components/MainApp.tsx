@@ -25,17 +25,65 @@ const MainApp: React.FC = () => {
   const [isSpaceSelectorOpen, setIsSpaceSelectorOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const { anytypeApiEndpoint } = useContext(SettingsContext);
+  const { anytypeApiEndpoint, anytypeApiKey } = useContext(SettingsContext);
 
   const spaceSelectorRef = useRef<HTMLDivElement>(null);
   useOnClickOutside(spaceSelectorRef, () => setIsSpaceSelectorOpen(false));
 
+  // 暴露诊断工具到全局作用域
+  useEffect(() => {
+    (window as any).diagnoseSpaces = async () => {
+      console.log('🔧 Starting diagnosis...');
+      console.log('📋 Settings:', {
+        endpoint: anytypeApiEndpoint,
+        hasApiKey: !!anytypeApiKey,
+      });
+      
+      if (!anytypeApiEndpoint) {
+        console.error('❌ No endpoint configured');
+        return;
+      }
+
+      try {
+        console.log('📡 Attempting to fetch spaces...');
+        const response = await fetch(
+          anytypeApiEndpoint.includes('127.0.0.1') 
+            ? `/api/v1/spaces` 
+            : `${anytypeApiEndpoint}/v1/spaces`,
+          {
+            method: 'GET',
+            headers: {
+              'Anytype-Version': '2025-05-20',
+              'Content-Type': 'application/json',
+              ...(anytypeApiKey && { 'Authorization': `Bearer ${anytypeApiKey}` })
+            }
+          }
+        );
+        
+        console.log('📊 Response status:', response.status, response.statusText);
+        const data = await response.json();
+        console.log('📦 Full response:', JSON.stringify(data, null, 2));
+        console.log('🔍 Response keys:', Object.keys(data));
+        
+        // Try to find spaces in different possible locations
+        console.log('🔎 Searching for spaces...');
+        console.log('  - data.spaces:', data.spaces ? `found (${Array.isArray(data.spaces) ? 'array' : 'not array'})` : 'not found');
+        console.log('  - data.items:', data.items ? `found (${Array.isArray(data.items) ? 'array' : 'not array'})` : 'not found');
+        console.log('  - data.data:', data.data ? `found (${typeof data.data})` : 'not found');
+        
+      } catch (error) {
+        console.error('❌ Error during diagnosis:', error);
+      }
+    };
+  }, [anytypeApiEndpoint, anytypeApiKey]);
 
   useEffect(() => {
     const loadData = async () => {
       if (anytypeApiEndpoint) {
         setIsLoading(true);
-        const fetchedSpaces = await anytypeService.fetchAllSpaces(anytypeApiEndpoint);
+        console.log('🚀 Loading spaces from:', anytypeApiEndpoint);
+        const fetchedSpaces = await anytypeService.fetchAllSpaces(anytypeApiEndpoint, anytypeApiKey);
+        console.log('📊 Fetched spaces count:', fetchedSpaces.length);
         setSpaces(fetchedSpaces);
         if (fetchedSpaces.length > 0) {
           setActiveSpaceId(fetchedSpaces[0].id);
@@ -51,7 +99,7 @@ const MainApp: React.FC = () => {
     };
 
     loadData();
-  }, [anytypeApiEndpoint]);
+  }, [anytypeApiEndpoint, anytypeApiKey]);
 
   const activeSpace = spaces.find(s => s.id === activeSpaceId) || null;
 

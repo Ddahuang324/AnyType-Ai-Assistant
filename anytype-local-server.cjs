@@ -17,7 +17,7 @@
 //       - Linux: /home/<YourUser>/.config/anytype/data
 //     - **IMPORTANT**: Replace the placeholder path in `ANYTYPE_DATA_PATH` below with your actual path.
 // 4.  RUN THE SERVER: In your terminal, from this file's directory, run:
-//     node anytype-local-server.js
+//     node anytype-local-server.cjs
 // 5.  CONNECT THE APP:
 //     - In the web app's Settings, set the "Endpoint" to: http://localhost:3456
 //     - Click "Verify". It should now connect and load your data!
@@ -88,7 +88,7 @@ async function parseAnytypeData() {
         ];
 
         console.log('Successfully parsed (simulated) Anytype data.');
-        return { items: mockSpaces };
+        return { spaces: mockSpaces };
 
     } catch (error) {
         console.error(`Error parsing Anytype data: ${error.message}`);
@@ -97,20 +97,15 @@ async function parseAnytypeData() {
     }
 }
 
-// Watch for changes in the data directory to invalidate the cache
-const watcher = chokidar.watch(ANYTYPE_DATA_PATH, {
-  ignored: /(^|[\/\\])\../, // ignore dotfiles
-  persistent: true,
-  ignoreInitial: true,
-});
-
-watcher.on('all', (event, path) => {
-  console.log(`Change detected (${event}) in ${path}. Invalidating cache.`);
-  cachedSpaces = null; // Invalidate cache on any change
-});
+// File watching disabled to avoid "too many files" errors
+// In production, you might want to use a different approach like debounced polling
+let lastDataRefresh = Date.now();
+setInterval(() => {
+  cachedSpaces = null; // Invalidate cache every 30 seconds
+}, 30000);
 
 // --- API ENDPOINT ---
-app.get('/', async (req, res) => {
+app.get('/v1/spaces', async (req, res) => {
     // Add CORS headers to allow the web app to connect
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
@@ -125,6 +120,12 @@ app.get('/', async (req, res) => {
     res.json(cachedSpaces);
 });
 
+// Health check endpoint
+app.get('/', (req, res) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.json({ status: 'ok', message: 'Anytype Local Connector is running' });
+});
+
 // --- SERVER STARTUP ---
 app.listen(port, () => {
     console.log(`Anytype Local Connector is running on http://localhost:${port}`);
@@ -132,5 +133,6 @@ app.listen(port, () => {
     // Initial data load
     parseAnytypeData().then(data => {
         cachedSpaces = data;
+        console.log(`Initial data loaded: ${JSON.stringify(data, null, 2)}`);
     });
 });

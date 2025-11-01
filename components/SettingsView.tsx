@@ -27,6 +27,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
       aiApiKey, setAiApiKey,
       aiModel, setAiModel,
       anytypeApiEndpoint, setAnytypeApiEndpoint,
+      anytypeApiKey, setAnytypeApiKey,
       resetConfiguration
   } = useContext(SettingsContext);
 
@@ -35,9 +36,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const [currentAiKey, setCurrentAiKey] = useState(aiApiKey);
   const [selectedModelId, setSelectedModelId] = useState(aiModel);
   const [currentAnytypeEndpoint, setCurrentAnytypeEndpoint] = useState(anytypeApiEndpoint);
+  const [currentAnytypeApiKey, setCurrentAnytypeApiKey] = useState(anytypeApiKey);
 
   // Local UI state
   const [anytypeValidationState, setAnytypeValidationState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
+  const [anytypeApiKeyValidationState, setAnytypeApiKeyValidationState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
   const [aiValidationState, setAiValidationState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
   const [availableModels, setAvailableModels] = useState<AiModel[]>([]);
 
@@ -49,6 +52,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     }
     if(anytypeApiEndpoint) {
         setAnytypeValidationState('valid');
+    }
+    if(anytypeApiKey) {
+        setAnytypeApiKeyValidationState('valid');
     }
   }, []);
 
@@ -67,8 +73,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const handleVerifyAnytype = async () => {
     if (!currentAnytypeEndpoint.trim()) return;
     setAnytypeValidationState('validating');
-    const isValid = await anytypeService.validateAnytypeApi(currentAnytypeEndpoint);
+    const isValid = await anytypeService.validateAnytypeApi(currentAnytypeEndpoint, currentAnytypeApiKey);
     setAnytypeValidationState(isValid ? 'valid' : 'invalid');
+  };
+
+  const handleVerifyAnytypeApiKey = async () => {
+    if (!currentAnytypeApiKey.trim() || !currentAnytypeEndpoint.trim()) return;
+    setAnytypeApiKeyValidationState('validating');
+    const isValid = await anytypeService.validateAnytypeApi(currentAnytypeEndpoint, currentAnytypeApiKey);
+    setAnytypeApiKeyValidationState(isValid ? 'valid' : 'invalid');
   };
 
   const handleVerifyAiKey = async (provider: AiProvider, key: string, silent = false) => {
@@ -97,6 +110,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     }
     if (anytypeValidationState === 'valid' || currentAnytypeEndpoint === '') {
         setAnytypeApiEndpoint(currentAnytypeEndpoint);
+    }
+    if (anytypeApiKeyValidationState === 'valid' || currentAnytypeApiKey === '') {
+        setAnytypeApiKey(currentAnytypeApiKey);
     }
     onBack();
   };
@@ -154,7 +170,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                                 type="text"
                                 value={currentAnytypeEndpoint}
                                 onChange={e => { setCurrentAnytypeEndpoint(e.target.value); setAnytypeValidationState('idle'); }}
-                                placeholder="e.g., http://localhost:3456"
+                                placeholder="e.g., http://127.0.0.1:31009"
                                 className="w-full text-sm p-2 bg-background rounded-md border border-border focus:ring-1 focus:ring-brand-primary"
                             />
                             <button onClick={handleVerifyAnytype} disabled={!currentAnytypeEndpoint || anytypeValidationState === 'validating'} className="p-2 text-sm font-semibold bg-border rounded-md hover:bg-text-secondary/20 disabled:opacity-50">
@@ -163,6 +179,24 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                         </div>
                         {anytypeValidationState === 'invalid' && <p className="text-red-500 text-xs mt-1">Could not connect. Is the local server script running?</p>}
                         {anytypeValidationState === 'valid' && <p className="text-green-500 text-xs mt-1">Connection successful.</p>}
+                    </div>
+                    <div>
+                        <label className="text-sm font-medium text-text-primary" htmlFor="anytype-api-key">API Key (From Anytype)</label>
+                        <div className="flex items-center space-x-2 mt-1">
+                            <input
+                                id="anytype-api-key"
+                                type="password"
+                                value={currentAnytypeApiKey}
+                                onChange={e => { setCurrentAnytypeApiKey(e.target.value); setAnytypeApiKeyValidationState('idle'); }}
+                                placeholder="Your Anytype API Key"
+                                className="w-full text-sm p-2 bg-background rounded-md border border-border focus:ring-1 focus:ring-brand-primary"
+                            />
+                            <button onClick={handleVerifyAnytypeApiKey} disabled={!currentAnytypeApiKey || !currentAnytypeEndpoint || anytypeApiKeyValidationState === 'validating'} className="p-2 text-sm font-semibold bg-border rounded-md hover:bg-text-secondary/20 disabled:opacity-50">
+                                {anytypeApiKeyValidationState === 'validating' ? <LoaderIcon className="h-5 w-5" /> : 'Verify'}
+                            </button>
+                        </div>
+                        {anytypeApiKeyValidationState === 'invalid' && <p className="text-red-500 text-xs mt-1">Invalid API key. Please check your Anytype credentials.</p>}
+                        {anytypeApiKeyValidationState === 'valid' && <p className="text-green-500 text-xs mt-1">API key is valid.</p>}
                     </div>
                 </div>
             </section>

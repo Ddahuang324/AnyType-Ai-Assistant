@@ -16,6 +16,8 @@ interface SettingsContextType {
   setAiModel: (model: string) => void;
   anytypeApiEndpoint: string;
   setAnytypeApiEndpoint: (endpoint: string) => void;
+  anytypeApiKey: string;
+  setAnytypeApiKey: (key: string) => void;
   resetConfiguration: () => void;
 }
 
@@ -30,6 +32,8 @@ export const SettingsContext = createContext<SettingsContextType>({
   setAiModel: () => {},
   anytypeApiEndpoint: '',
   setAnytypeApiEndpoint: () => {},
+  anytypeApiKey: '',
+  setAnytypeApiKey: () => {},
   resetConfiguration: () => {},
 });
 
@@ -43,6 +47,7 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
   const [aiApiKey, setAiApiKeyState] = useState<string>('');
   const [aiModel, setAiModelState] = useState<string>('');
   const [anytypeApiEndpoint, setAnytypeApiEndpointState] = useState<string>('');
+  const [anytypeApiKey, setAnytypeApiKeyState] = useState<string>('');
 
   useEffect(() => {
     // Load settings from localStorage on initial load
@@ -58,6 +63,7 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     setAiApiKeyState(localStorage.getItem('anytype-ai-key') || '');
     setAiModelState(localStorage.getItem('anytype-ai-model') || '');
     setAnytypeApiEndpointState(localStorage.getItem('anytype-api-endpoint') || '');
+    setAnytypeApiKeyState(localStorage.getItem('anytype-api-key') || '');
 
   }, []);
 
@@ -86,23 +92,30 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     localStorage.setItem('anytype-api-endpoint', endpoint);
   }
 
+  const setAnytypeApiKey = (key: string) => {
+    setAnytypeApiKeyState(key);
+    localStorage.setItem('anytype-api-key', key);
+  }
+
   const resetConfiguration = () => {
     // Clear state
     setAiProviderState('');
     setAiApiKeyState('');
     setAiModelState('');
     setAnytypeApiEndpointState('');
+    setAnytypeApiKeyState('');
     
     // Clear localStorage
     localStorage.removeItem('anytype-ai-provider');
     localStorage.removeItem('anytype-ai-key');
     localStorage.removeItem('anytype-ai-model');
     localStorage.removeItem('anytype-api-endpoint');
+    localStorage.removeItem('anytype-api-key');
   }
 
 
   return (
-    <SettingsContext.Provider value={{ theme, setTheme, aiProvider, setAiProvider, aiApiKey, setAiApiKey, aiModel, setAiModel, anytypeApiEndpoint, setAnytypeApiEndpoint, resetConfiguration }}>
+    <SettingsContext.Provider value={{ theme, setTheme, aiProvider, setAiProvider, aiApiKey, setAiApiKey, aiModel, setAiModel, anytypeApiEndpoint, setAnytypeApiEndpoint, anytypeApiKey, setAnytypeApiKey, resetConfiguration }}>
       {children}
     </SettingsContext.Provider>
   );
