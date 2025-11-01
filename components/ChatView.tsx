@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
-import type { Message, ChatHistoryItem, Blueprint } from '../types';
+
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import type { Message, ChatHistoryItem, Blueprint, Space, AnyObject } from '../types';
 import { continueConversation, generateChatTitle } from '../services/geminiService';
 import * as historyService from '../services/historyService';
 import * as blueprintService from '../services/blueprintService';
@@ -10,14 +11,23 @@ import PencilIcon from './icons/PencilIcon';
 import BlueprintModal from './BlueprintModal';
 import ChevronDownIcon from './icons/ChevronDownIcon';
 import BlueprintIcon from './icons/BlueprintIcon';
+import ObjectSelectorModal from './ObjectSelectorModal';
+import XIcon from './icons/XIcon';
 
-const ChatView: React.FC = () => {
+interface ChatViewProps {
+    space: Space | null;
+    isSidebarOpen: boolean;
+    setIsSidebarOpen: (isOpen: boolean) => void;
+}
+
+const ChatView: React.FC<ChatViewProps> = ({ space, isSidebarOpen, setIsSidebarOpen }) => {
   // UI State
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isBlueprintModalOpen, setIsBlueprintModalOpen] = useState(false);
   const [isHistoryVisible, setIsHistoryVisible] = useState(true);
   const [isBlueprintsVisible, setIsBlueprintsVisible] = useState(true);
+  const [isObjectModalOpen, setIsObjectModalOpen] = useState(false);
   
   // Data State
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
@@ -26,9 +36,22 @@ const ChatView: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
   const [blueprintToEdit, setBlueprintToEdit] = useState<Blueprint | null>(null);
+  const [selectedObjects, setSelectedObjects] = useState<AnyObject[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Memoize the flattened list of objects from the current space
+  const allObjectsInSpace = useMemo(() => {
+    if (!space) return [];
+    // Map each set to an AnyObject-like structure to create a tree
+    return space.sets.map(set => ({
+      id: set.id,
+      name: set.name,
+      relations: {}, // Sets don't have relations in this context
+      children: set.objects,
+    }));
+  }, [space]);
 
   // Load history and blueprints on mount
   useEffect(() => {
@@ -50,23 +73,35 @@ const ChatView: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+  
+  // Effect to clear selected objects when space changes
+  useEffect(() => {
+    setSelectedObjects([]);
+  }, [space]);
+
 
   // --- NAVIGATION HANDLERS ---
   const handleNewChat = () => {
     setActiveChatId(null);
     setActiveBlueprintId(null);
     setInput('');
+    setSelectedObjects([]);
+    setIsSidebarOpen(false);
   };
 
   const handleSelectChat = (chatId: string) => {
     setActiveChatId(chatId);
     setActiveBlueprintId(null);
+    setSelectedObjects([]);
+    setIsSidebarOpen(false);
   };
   
   const handleSelectBlueprint = (blueprintId: string) => {
     setActiveBlueprintId(blueprintId);
     setActiveChatId(null);
     setInput('');
+    setSelectedObjects([]);
+    setIsSidebarOpen(false);
   };
 
   // --- CHAT HANDLERS ---
@@ -83,18 +118,23 @@ const ChatView: React.FC = () => {
     if (!messageText.trim() || isLoading) return;
 
     const userInput = messageText;
-    const userMessage: Message = { id: Date.now().toString(), role: 'user', text: userInput };
+    const contextPrefix = selectedObjects.length > 0
+        ? `Referring to the following object(s):\n${selectedObjects.map(o => `- ${o.name}`).join('\n')}\n\n`
+        : '';
+    const messageWithContext = contextPrefix + userInput;
+    
+    const userMessage: Message = { id: Date.now().toString(), role: 'user', text: messageWithContext };
     
     const conversationHistoryForAPI = [...messages];
     
     setMessages(prev => [...prev, userMessage]);
     setInput('');
+    setSelectedObjects([]);
     setIsLoading(true);
 
     let currentChatId = activeChatId;
     let chatToSave: ChatHistoryItem;
 
-    // This is a new chat, either from a blueprint or a regular one
     if (!currentChatId) {
       const title = await generateChatTitle(userInput);
       const newChat: ChatHistoryItem = {
@@ -106,7 +146,7 @@ const ChatView: React.FC = () => {
       const updatedHistory = historyService.saveChat(newChat);
       setChatHistory(updatedHistory);
       setActiveChatId(newChat.id);
-      setActiveBlueprintId(null); // Once chat starts, it's a regular chat
+      setActiveBlueprintId(null);
       currentChatId = newChat.id;
       chatToSave = newChat;
     } else {
@@ -117,7 +157,7 @@ const ChatView: React.FC = () => {
     }
     
     try {
-      const responseText = await continueConversation(conversationHistoryForAPI, userInput);
+      const responseText = await continueConversation(conversationHistoryForAPI, messageWithContext);
       const modelMessage: Message = { id: (Date.now() + 1).toString(), role: 'model', text: responseText };
       
       setMessages(prev => [...prev, modelMessage]);
@@ -137,6 +177,10 @@ const ChatView: React.FC = () => {
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSendMessage(input);
+  };
+  
+  const handleRemoveObject = (objectId: string) => {
+    setSelectedObjects(prev => prev.filter(obj => obj.id !== objectId));
   };
 
   // --- BLUEPRINT HANDLERS ---
@@ -169,7 +213,6 @@ const ChatView: React.FC = () => {
 
   // --- MAIN CONTENT RENDERER ---
   const MainContent = () => {
-    // 1. Active Chat View
     if (activeChatId) {
       return (
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -181,8 +224,8 @@ const ChatView: React.FC = () => {
               <div
                 className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-3 rounded-2xl ${
                   msg.role === 'user'
-                    ? 'bg-[#005F73] text-white rounded-br-none'
-                    : 'bg-gray-100 text-[#222222] rounded-bl-none'
+                    ? 'bg-brand-primary text-white rounded-br-none'
+                    : 'bg-ui-hover-background text-text-primary rounded-bl-none'
                 }`}
               >
                 <p className="text-sm break-words whitespace-pre-wrap">{msg.text}</p>
@@ -191,11 +234,11 @@ const ChatView: React.FC = () => {
           ))}
           {isLoading && (
             <div className="flex justify-start">
-              <div className="px-4 py-3 rounded-2xl bg-gray-100 text-[#222222] rounded-bl-none">
+              <div className="px-4 py-3 rounded-2xl bg-ui-hover-background text-text-primary rounded-bl-none">
                 <div className="flex items-center space-x-2">
-                  <span className="h-2 w-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                  <span className="h-2 w-2 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                  <span className="h-2 w-2 bg-gray-400 rounded-full animate-bounce"></span>
+                  <span className="h-2 w-2 bg-text-secondary rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                  <span className="h-2 w-2 bg-text-secondary rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                  <span className="h-2 w-2 bg-text-secondary rounded-full animate-bounce"></span>
                 </div>
               </div>
             </div>
@@ -205,29 +248,28 @@ const ChatView: React.FC = () => {
       );
     }
 
-    // 2. Active Blueprint Session View
     if (activeBlueprintId) {
       const blueprint = blueprints.find(p => p.id === activeBlueprintId);
       const relatedChats = chatHistory.filter(c => c.blueprintId === activeBlueprintId);
-      if (!blueprint) return null; // Should not happen
+      if (!blueprint) return null;
 
       return (
-        <div className="flex-1 w-full flex flex-col items-center justify-center p-4 md:p-8 bg-white">
+        <div className="flex-1 w-full flex flex-col items-center justify-center p-4 md:p-8 bg-background">
           <div className="text-center max-w-2xl">
-            <div className="inline-flex items-center justify-center bg-gradient-to-br from-[#005F73] to-[#00A896] p-4 rounded-full mb-4">
+            <div className="inline-flex items-center justify-center bg-brand-primary p-4 rounded-full mb-4">
                 <BlueprintIcon />
             </div>
-            <h1 className="text-4xl font-bold text-[#222222]">{blueprint.title}</h1>
-            <p className="text-gray-500 mt-2 mb-8">{blueprint.prompt}</p>
+            <h1 className="text-3xl md:text-4xl font-bold text-text-primary">{blueprint.title}</h1>
+            <p className="text-text-secondary mt-2 mb-8">{blueprint.prompt}</p>
 
             {relatedChats.length > 0 && (
                 <div className="text-left w-full">
-                    <h3 className="font-semibold text-gray-600 mb-2">Recent</h3>
+                    <h3 className="font-semibold text-text-secondary mb-2">Recent</h3>
                     <ul className="space-y-2">
                         {relatedChats.slice(0, 3).map(chat => (
                             <li key={chat.id}>
-                                <button onClick={() => handleSelectChat(chat.id)} className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
-                                    <p className="truncate text-sm text-gray-700">{chat.title}</p>
+                                <button onClick={() => handleSelectChat(chat.id)} className="w-full text-left p-3 bg-ui-background hover:bg-ui-hover-background rounded-lg transition-colors">
+                                    <p className="truncate text-sm text-text-primary">{chat.title}</p>
                                 </button>
                             </li>
                         ))}
@@ -239,32 +281,41 @@ const ChatView: React.FC = () => {
       );
     }
 
-    // 3. Welcome View (Default)
     return (
-      <div className="flex-1 w-full flex flex-col items-center justify-center p-4 md:p-8 bg-white">
+      <div className="flex-1 w-full flex flex-col items-center justify-center p-4 md:p-8 bg-background">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-[#222222]">AI Assistant</h1>
-          <p className="text-gray-500 mt-2">Select a chat, start a new one, or use a blueprint from the sidebar.</p>
+          <h1 className="text-3xl md:text-4xl font-bold text-text-primary">AI Assistant</h1>
+          <p className="text-text-secondary mt-2">Select a chat, start a new one, or use a blueprint from the sidebar.</p>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="flex h-full w-full bg-white">
-      <aside className="w-full max-w-xs bg-gray-50 border-r border-gray-200 flex flex-col overflow-y-auto">
-        {/* Blueprints Section */}
-        <div className="p-2 border-b border-gray-200">
+    <div className="flex h-full w-full bg-background text-text-primary">
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <aside 
+        className={`w-80 bg-ui-background border-r border-border flex flex-col overflow-y-auto
+                   fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0
+                   ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        <div className="p-2 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-                <button onClick={() => setIsBlueprintsVisible(!isBlueprintsVisible)} className="p-1 rounded-md hover:bg-gray-200">
+                <button onClick={() => setIsBlueprintsVisible(!isBlueprintsVisible)} className="p-1 rounded-md hover:bg-ui-hover-background">
                      <div className={`transition-transform duration-200 ${!isBlueprintsVisible && '-rotate-90'}`}>
                         <ChevronDownIcon />
                      </div>
                 </button>
                 <h2 className="text-lg font-semibold ml-1">Blueprints</h2>
             </div>
-            <button onClick={handleOpenCreateModal} className="p-2 text-[#222222] bg-gray-200/50 rounded-lg hover:bg-gray-200" aria-label="Create New Blueprint">
+            <button onClick={handleOpenCreateModal} className="p-2 text-text-primary bg-ui-hover-background/50 rounded-lg hover:bg-ui-hover-background" aria-label="Create New Blueprint">
               <PlusIcon />
             </button>
           </div>
@@ -276,15 +327,15 @@ const ChatView: React.FC = () => {
                     <li key={blueprint.id}>
                     <a href="#" onClick={(e) => { e.preventDefault(); handleSelectBlueprint(blueprint.id); }}
                         className={`group flex justify-between items-center w-full text-left p-3 rounded-lg text-sm transition-colors duration-200 ${
-                             activeBlueprintId === blueprint.id ? 'bg-gray-300' : 'hover:bg-gray-200'
+                             activeBlueprintId === blueprint.id ? 'bg-ui-hover-background' : 'hover:bg-ui-hover-background'
                         }`}>
                         <div className="flex-1 truncate">
-                            <p className="font-medium text-gray-800">{blueprint.title}</p>
-                            <p className="text-xs text-gray-500 truncate">{blueprint.prompt}</p>
+                            <p className="font-medium text-text-primary">{blueprint.title}</p>
+                            <p className="text-xs text-text-secondary truncate">{blueprint.prompt}</p>
                         </div>
                         <div className="flex items-center ml-2 space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={(e) => handleOpenEditModal(e, blueprint)} className="p-1.5 rounded-md hover:bg-gray-300 text-gray-600"><PencilIcon/></button>
-                            <button onClick={(e) => handleDeleteBlueprint(e, blueprint.id)} className="p-1.5 rounded-md hover:bg-red-100 text-red-600"><TrashIcon/></button>
+                            <button onClick={(e) => handleOpenEditModal(e, blueprint)} className="p-1.5 rounded-md hover:bg-border text-text-secondary"><PencilIcon/></button>
+                            <button onClick={(e) => handleDeleteBlueprint(e, blueprint.id)} className="p-1.5 rounded-md hover:bg-red-900/50 text-red-400"><TrashIcon/></button>
                         </div>
                     </a>
                     </li>
@@ -293,18 +344,17 @@ const ChatView: React.FC = () => {
             </nav>
         )}
 
-        {/* Recent Chats Section */}
-        <div className="p-2 border-t border-b border-gray-200">
+        <div className="p-2 border-t border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <button onClick={() => setIsHistoryVisible(!isHistoryVisible)} className="p-1 rounded-md hover:bg-gray-200">
+              <button onClick={() => setIsHistoryVisible(!isHistoryVisible)} className="p-1 rounded-md hover:bg-ui-hover-background">
                  <div className={`transition-transform duration-200 ${!isHistoryVisible && '-rotate-90'}`}>
                     <ChevronDownIcon />
                  </div>
               </button>
               <h2 className="text-lg font-semibold ml-1">Recent Chats</h2>
             </div>
-            <button onClick={handleNewChat} className="p-2 text-[#222222] bg-gray-200/50 rounded-lg hover:bg-gray-200" aria-label="New Chat">
+            <button onClick={handleNewChat} className="p-2 text-text-primary bg-ui-hover-background/50 rounded-lg hover:bg-ui-hover-background" aria-label="New Chat">
                 <PlusIcon />
             </button>
           </div>
@@ -316,12 +366,12 @@ const ChatView: React.FC = () => {
                 <li key={chat.id}>
                   <a href="#" onClick={(e) => { e.preventDefault(); handleSelectChat(chat.id); }}
                     className={`group flex justify-between items-center w-full text-left p-3 rounded-lg text-sm transition-colors duration-200 ${
-                      activeChatId === chat.id ? 'bg-[#005F73] text-white' : 'hover:bg-gray-200'
+                      activeChatId === chat.id ? 'bg-brand-primary text-white' : 'hover:bg-ui-hover-background'
                     }`}>
                     <span className="truncate flex-1">{chat.title}</span>
                     <button onClick={(e) => handleDeleteChat(e, chat.id)}
                       className={`ml-2 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${
-                        activeChatId === chat.id ? 'text-gray-300 hover:bg-white/20' : 'text-gray-500 hover:bg-red-100 hover:text-red-600'
+                        activeChatId === chat.id ? 'text-gray-300 hover:bg-white/20' : 'text-text-secondary hover:bg-red-900/50 hover:text-red-400'
                       }`} aria-label="Delete chat">
                       <TrashIcon />
                     </button>
@@ -333,24 +383,48 @@ const ChatView: React.FC = () => {
         )}
       </aside>
 
-      <main className="flex-1 flex flex-col bg-white">
+      <main className="flex-1 flex flex-col bg-background">
         <MainContent />
-        <div className="p-4 border-t border-gray-200 bg-white">
+        <div className="p-4 border-t border-border bg-background">
+            {selectedObjects.length > 0 && (
+                <div className="mb-2 p-2 border border-border rounded-lg bg-ui-background">
+                    <div className="flex flex-wrap gap-2">
+                    {selectedObjects.map(obj => (
+                        <div key={obj.id} className="flex items-center bg-ui-hover-background text-text-primary text-sm font-medium px-2 py-1 rounded-md animate-fade-in-up">
+                            <span>{obj.name}</span>
+                            <button onClick={() => handleRemoveObject(obj.id)} className="ml-2 text-text-secondary hover:text-text-primary">
+                                <XIcon />
+                            </button>
+                        </div>
+                    ))}
+                    </div>
+                </div>
+            )}
           <form onSubmit={handleFormSubmit} className="flex items-center space-x-2">
+            <button
+                type="button"
+                onClick={() => setIsObjectModalOpen(true)}
+                disabled={!space}
+                className="p-3 bg-ui-hover-background text-text-primary rounded-lg transition-colors duration-200
+                           hover:bg-border disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Add object context"
+            >
+                <PlusIcon />
+            </button>
             <input
               ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={activeBlueprintId ? blueprints.find(p=>p.id === activeBlueprintId)?.title || "Start conversation..." : "Ask me anything..."}
-              className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#005F73] focus:border-transparent transition-all duration-300 ease-in-out"
+              className="flex-1 p-3 border border-border rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all duration-300 ease-in-out bg-ui-background text-text-primary placeholder:text-text-secondary"
               disabled={isLoading}
             />
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="p-3 bg-[#005F73] text-white rounded-lg transition-all duration-300 ease-in-out
-                       transform hover:scale-105 disabled:bg-gray-300 disabled:scale-100"
+              className="p-3 bg-brand-primary text-white rounded-lg transition-all duration-300 ease-in-out
+                       transform hover:scale-105 disabled:bg-ui-hover-background disabled:scale-100"
             >
               <SendIcon />
             </button>
@@ -364,16 +438,14 @@ const ChatView: React.FC = () => {
         onSave={handleSaveBlueprint} 
         blueprintToEdit={blueprintToEdit}
       />
-
-      <style>{`
-        @keyframes fade-in-up {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-in-up {
-          animation: fade-in-up 0.4s ease-out forwards;
-        }
-      `}</style>
+      
+      <ObjectSelectorModal
+        isOpen={isObjectModalOpen}
+        onClose={() => setIsObjectModalOpen(false)}
+        onConfirm={setSelectedObjects}
+        objects={allObjectsInSpace}
+        initiallySelected={selectedObjects}
+      />
     </div>
   );
 };

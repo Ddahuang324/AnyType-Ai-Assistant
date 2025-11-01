@@ -16,8 +16,34 @@ const cppSet: ObjectSet = {
     ],
     objects: [
         { id: 'cpp-1', name: '编译器', relations: { type: '框架性知识', understanding: '少半理解', difficulty: '中级', importance: '一般', created: '05.29.2025', opened: '08.26.2025' } },
-        { id: 'cpp-2', name: '高级内存管理', relations: { type: '框架性知识', understanding: '少半理解', difficulty: '中级', importance: '重要', created: '04.12.2025', opened: '06.12.2025' } },
-        { id: 'cpp-3', name: '面向对象编程', relations: { type: '框架性知识', understanding: '多半理解', difficulty: '中级', importance: '重要', created: '04.10.2025', opened: '10.16.2025' } },
+        { 
+            id: 'cpp-2', 
+            name: '高级内存管理', 
+            relations: { type: '框架性知识', understanding: '少半理解', difficulty: '中级', importance: '重要', created: '04.12.2025', opened: '06.12.2025' },
+            children: [
+                { id: 'cpp-2-1', name: 'RAII (资源获取即初始化)', relations: { type: '核心原则', understanding: '多半理解', difficulty: '中级', importance: '重要' } },
+                { 
+                    id: 'cpp-2-2', 
+                    name: '智能指针', 
+                    relations: { type: '工具', understanding: '少半理解', difficulty: '高级', importance: '重要' },
+                    children: [
+                        { id: 'cpp-2-2-1', name: 'std::unique_ptr', relations: { type: '具体实现', understanding: '多半理解', difficulty: '中级', importance: '重要' } },
+                        { id: 'cpp-2-2-2', name: 'std::shared_ptr', relations: { type: '具体实现', understanding: '少半理解', difficulty: '高级', importance: '重要' } },
+                        { id: 'cpp-2-2-3', name: 'std::weak_ptr', relations: { type: '具体实现', understanding: '少半理解', difficulty: '高级', importance: '一般' } },
+                    ]
+                },
+            ]
+        },
+        { 
+            id: 'cpp-3', 
+            name: '面向对象编程', 
+            relations: { type: '框架性知识', understanding: '多半理解', difficulty: '中级', importance: '重要', created: '04.10.2025', opened: '10.16.2025' },
+            children: [
+                { id: 'cpp-3-1', name: '封装', relations: { type: '核心概念', understanding: '完全理解', difficulty: '初级', importance: '重要' } },
+                { id: 'cpp-3-2', name: '继承', relations: { type: '核心概念', understanding: '多半理解', difficulty: '中级', importance: '重要' } },
+                { id: 'cpp-3-3', name: '多态', relations: { type: '核心概念', understanding: '少半理解', difficulty: '高级', importance: '重要' } },
+            ]
+        },
         { id: 'cpp-4', name: '指针和引用', relations: { type: '框架性知识', understanding: '多半理解', difficulty: '中级', importance: '重要', created: '04.10.2025', opened: '08.26.2025' } },
         { id: 'cpp-5', name: '数据类型', relations: { type: '框架性知识', understanding: '多半理解', difficulty: '初级', importance: '一般', created: '04.10.2025', opened: '08.26.2025' } },
         { id: 'cpp-6', name: '函数', relations: { type: '框架性知识', understanding: '完全理解', difficulty: '初级', importance: '一般', created: '04.09.2025', opened: '08.26.2025' } },
@@ -41,9 +67,9 @@ const leetcodeSet: ObjectSet = {
     objects: [
         { id: 'lc-1', name: '704.二分查找', relations: { source: 'https...', understanding: '完全理解', algorithm: ['查找元素'], dataStructure: ['数组'], timeComplexity: 'O(log n)', spaceComplexity: 'O(1)' } },
         { id: 'lc-2', name: '35.搜索插入位置', relations: { source: 'https...', understanding: '多半理解', algorithm: ['查找元素'], dataStructure: ['数组'], timeComplexity: 'O(log n)', spaceComplexity: 'O(1)' } },
-        { id: 'lc-3', name: '34.在排序数组中查找元素的位置', relations: { source: 'https...', understanding: '完全理解', algorithm: ['查找元素'], dataStructure: ['数组'], timeComplexity: 'O(log n)', spaceComplexity: 'O(1)' } },
-        { id: 'lc-4', name: '27.移除元素', relations: { source: 'https..._1', understanding: '多半理解', algorithm: ['移除元素', '双指针'], dataStructure: ['数组'], timeComplexity: 'O(n)', spaceComplexity: 'O(1)' } },
-        { id: 'lc-5', name: '26.从排序数组中删除重复项', relations: { source: 'https..._2', understanding: '多半理解', algorithm: ['移除元素', '快慢指针'], dataStructure: ['数组'], timeComplexity: 'O(n)', spaceComplexity: 'O(1)' } },
+        { id: 'lc-3', name: '34.在排序数组中查找元素的位置', relations: { source: 'https..._1', understanding: '完全理解', algorithm: ['查找元素'], dataStructure: ['数组'], timeComplexity: 'O(log n)', spaceComplexity: 'O(1)' } },
+        { id: 'lc-4', name: '27.移除元素', relations: { source: 'https..._2', understanding: '多半理解', algorithm: ['移除元素', '双指针'], dataStructure: ['数组'], timeComplexity: 'O(n)', spaceComplexity: 'O(1)' } },
+        { id: 'lc-5', name: '26.从排序数组中删除重复项', relations: { source: 'https..._3', understanding: '多半理解', algorithm: ['移除元素', '快慢指针'], dataStructure: ['数组'], timeComplexity: 'O(n)', spaceComplexity: 'O(1)' } },
     ]
 };
 
