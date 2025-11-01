@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect } from 'react';
+import type { Space } from '../types';
 
 type Theme = 'light' | 'dark';
 export type AiProvider = 'gemini' | 'openai' | 'anthropic' | '';
@@ -13,10 +14,8 @@ interface SettingsContextType {
   setAiApiKey: (key: string) => void;
   aiModel: string;
   setAiModel: (model: string) => void;
-  anytypeApiKey: string;
-  setAnytypeApiKey: (key: string) => void;
   anytypeApiEndpoint: string;
-  setAnytypeApiEndpoint: (url: string) => void;
+  setAnytypeApiEndpoint: (endpoint: string) => void;
   resetConfiguration: () => void;
 }
 
@@ -29,8 +28,6 @@ export const SettingsContext = createContext<SettingsContextType>({
   setAiApiKey: () => {},
   aiModel: '',
   setAiModel: () => {},
-  anytypeApiKey: '',
-  setAnytypeApiKey: () => {},
   anytypeApiEndpoint: '',
   setAnytypeApiEndpoint: () => {},
   resetConfiguration: () => {},
@@ -45,7 +42,6 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
   const [aiProvider, setAiProviderState] = useState<AiProvider>('');
   const [aiApiKey, setAiApiKeyState] = useState<string>('');
   const [aiModel, setAiModelState] = useState<string>('');
-  const [anytypeApiKey, setAnytypeApiKeyState] = useState<string>('');
   const [anytypeApiEndpoint, setAnytypeApiEndpointState] = useState<string>('');
 
   useEffect(() => {
@@ -61,8 +57,7 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     setAiProviderState(localStorage.getItem('anytype-ai-provider') as AiProvider || '');
     setAiApiKeyState(localStorage.getItem('anytype-ai-key') || '');
     setAiModelState(localStorage.getItem('anytype-ai-model') || '');
-    setAnytypeApiKeyState(localStorage.getItem('anytype-anytype-key') || '');
-    setAnytypeApiEndpointState(localStorage.getItem('anytype-anytype-endpoint') || '');
+    setAnytypeApiEndpointState(localStorage.getItem('anytype-api-endpoint') || '');
 
   }, []);
 
@@ -86,14 +81,9 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     localStorage.setItem('anytype-ai-model', model);
   }
 
-  const setAnytypeApiKey = (key: string) => {
-    setAnytypeApiKeyState(key);
-    localStorage.setItem('anytype-anytype-key', key);
-  }
-
-  const setAnytypeApiEndpoint = (url: string) => {
-    setAnytypeApiEndpointState(url);
-    localStorage.setItem('anytype-anytype-endpoint', url);
+  const setAnytypeApiEndpoint = (endpoint: string) => {
+    setAnytypeApiEndpointState(endpoint);
+    localStorage.setItem('anytype-api-endpoint', endpoint);
   }
 
   const resetConfiguration = () => {
@@ -101,20 +91,18 @@ export const SettingsProvider: React.FC<SettingsProviderProps> = ({ children }) 
     setAiProviderState('');
     setAiApiKeyState('');
     setAiModelState('');
-    setAnytypeApiKeyState('');
     setAnytypeApiEndpointState('');
+    
     // Clear localStorage
     localStorage.removeItem('anytype-ai-provider');
     localStorage.removeItem('anytype-ai-key');
     localStorage.removeItem('anytype-ai-model');
-    localStorage.removeItem('anytype-anytype-key');
-    localStorage.removeItem('anytype-anytype-endpoint');
-    localStorage.removeItem('anytype-setup-complete');
+    localStorage.removeItem('anytype-api-endpoint');
   }
 
 
   return (
-    <SettingsContext.Provider value={{ theme, setTheme, aiProvider, setAiProvider, aiApiKey, setAiApiKey, aiModel, setAiModel, anytypeApiKey, setAnytypeApiKey, anytypeApiEndpoint, setAnytypeApiEndpoint, resetConfiguration }}>
+    <SettingsContext.Provider value={{ theme, setTheme, aiProvider, setAiProvider, aiApiKey, setAiApiKey, aiModel, setAiModel, anytypeApiEndpoint, setAnytypeApiEndpoint, resetConfiguration }}>
       {children}
     </SettingsContext.Provider>
   );

@@ -1,10 +1,9 @@
-
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import NotesView from './NotesView';
 import ChatView from './ChatView';
 import type { Space } from '../types';
-import { MOCK_SPACES } from '../data/mockData';
+import { SettingsContext } from '../contexts/SettingsContext';
+import * as anytypeService from '../services/anytypeService';
 import ChevronDownIcon from './icons/ChevronDownIcon';
 import SettingsIcon from './icons/SettingsIcon';
 import SettingsView from './SettingsView';
@@ -12,6 +11,7 @@ import { useOnClickOutside } from '../hooks/useOnClickOutside';
 import MenuIcon from './icons/MenuIcon';
 import CheckIcon from './icons/CheckIcon';
 import XIcon from './icons/XIcon';
+import LoaderIcon from './icons/LoaderIcon';
 
 type View = 'notes' | 'chat';
 type Screen = 'main' | 'settings';
@@ -23,18 +23,35 @@ const MainApp: React.FC = () => {
   const [activeSpaceId, setActiveSpaceId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSpaceSelectorOpen, setIsSpaceSelectorOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const { anytypeApiEndpoint } = useContext(SettingsContext);
 
   const spaceSelectorRef = useRef<HTMLDivElement>(null);
   useOnClickOutside(spaceSelectorRef, () => setIsSpaceSelectorOpen(false));
 
 
   useEffect(() => {
-    // In a real app, this would be an async fetch
-    setSpaces(MOCK_SPACES);
-    if (MOCK_SPACES.length > 0) {
-      setActiveSpaceId(MOCK_SPACES[0].id);
-    }
-  }, []);
+    const loadData = async () => {
+      if (anytypeApiEndpoint) {
+        setIsLoading(true);
+        const fetchedSpaces = await anytypeService.fetchAllSpaces(anytypeApiEndpoint);
+        setSpaces(fetchedSpaces);
+        if (fetchedSpaces.length > 0) {
+          setActiveSpaceId(fetchedSpaces[0].id);
+        } else {
+          setActiveSpaceId(null);
+        }
+        setIsLoading(false);
+      } else {
+        setSpaces([]);
+        setActiveSpaceId(null);
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, [anytypeApiEndpoint]);
 
   const activeSpace = spaces.find(s => s.id === activeSpaceId) || null;
 
@@ -76,6 +93,71 @@ const MainApp: React.FC = () => {
   if (currentScreen === 'settings') {
     return <SettingsView onBack={() => setCurrentScreen('main')} />;
   }
+  
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+              <LoaderIcon className="h-8 w-8 mx-auto text-text-secondary" />
+              <p className="mt-2 text-text-secondary">Loading Spaces...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (!anytypeApiEndpoint) {
+      return (
+          <div className="flex-1 flex items-center justify-center">
+              <div className="text-center p-4">
+                  <h2 className="text-xl font-bold">Welcome to Anytype AI Hub</h2>
+                  <p className="text-text-secondary mt-2 mb-4">To get started, please configure your local Anytype connection in settings.</p>
+                  <button onClick={() => setCurrentScreen('settings')} className="px-4 py-2 bg-brand-primary text-white font-semibold rounded-md hover:bg-brand-secondary transition-colors">
+                      Go to Settings
+                  </button>
+              </div>
+          </div>
+      )
+    }
+
+    if (spaces.length === 0) {
+        return (
+            <div className="flex-1 flex items-center justify-center">
+                <div className="text-center p-4">
+                    <h2 className="text-xl font-bold">No Spaces Found</h2>
+                    <p className="text-text-secondary mt-2">Could not find any spaces at the configured endpoint.</p>
+                    <p className="text-text-secondary mt-1 text-sm">Please ensure your local connector script is running and configured correctly.</p>
+                </div>
+            </div>
+        )
+    }
+
+    return (
+      <main className="flex-1 relative">
+        <div
+          className={`absolute inset-0 transition-opacity duration-500 ease-in-out h-full w-full
+            ${activeView === 'notes' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`
+          }
+        >
+          <div className="h-full overflow-y-auto p-4 md:p-8">
+            <NotesView space={activeSpace} />
+          </div>
+        </div>
+
+        <div
+          className={`absolute inset-0 transition-opacity duration-500 ease-in-out h-full w-full
+            ${activeView === 'chat' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`
+          }
+        >
+          <ChatView 
+            space={activeSpace}
+            isSidebarOpen={isSidebarOpen}
+            setIsSidebarOpen={setIsSidebarOpen}
+          />
+        </div>
+      </main>
+    );
+  };
 
   return (
     <div className="w-full h-screen flex flex-col bg-background text-text-primary">
@@ -93,7 +175,6 @@ const MainApp: React.FC = () => {
         </div>
 
         <div className="flex justify-center items-center flex-shrink-0">
-          {/* View Navigator */}
           <nav className="flex items-center space-x-1 md:space-x-2 p-1 bg-ui-hover-background rounded-lg">
             <NavButton view="notes" label="Project Hub" />
             <NavButton view="chat" label="AI Assistant" />
@@ -101,19 +182,21 @@ const MainApp: React.FC = () => {
         </div>
         
         <div className="flex-1 flex justify-end items-center space-x-2 md:space-x-4">
-            {/* Space Selector Dropdown */}
             <div ref={spaceSelectorRef} className="relative">
                 <button
                     onClick={() => setIsSpaceSelectorOpen(!isSpaceSelectorOpen)}
-                    className="flex items-center space-x-2 p-1.5 bg-ui-background border border-transparent rounded-lg hover:bg-ui-hover-background hover:border-border transition-all duration-200"
+                    className="flex items-center space-x-2 p-1.5 bg-ui-background border border-transparent rounded-lg hover:bg-ui-hover-background hover:border-border transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label="Select a Space"
                     aria-haspopup="true"
                     aria-expanded={isSpaceSelectorOpen}
+                    disabled={isLoading || spaces.length === 0}
                 >
-                    {activeSpace && (
+                    {activeSpace ? (
                         <div className={`w-7 h-7 rounded-md flex items-center justify-center ${generateColorFromName(activeSpace.name)}`}>
                             <span className="text-white font-bold text-xs">{getInitials(activeSpace.name)}</span>
                         </div>
+                    ) : (
+                       <div className="w-7 h-7 rounded-md flex items-center justify-center bg-ui-hover-background border border-border"></div>
                     )}
                     <div className="text-text-secondary">
                         <ChevronDownIcon />
@@ -124,7 +207,8 @@ const MainApp: React.FC = () => {
                     <div className="absolute top-full right-0 mt-2 w-64 bg-ui-background rounded-lg shadow-2xl border border-border z-50 transform transition-all duration-200 origin-top-right animate-fade-in-down">
                         <div className="p-2">
                            <p className="px-2 py-1 text-xs font-semibold text-text-secondary uppercase">Spaces</p>
-                           <ul className="mt-1">
+                           {spaces.length > 0 ? (
+                            <ul className="mt-1">
                                {spaces.map(space => (
                                    <li key={space.id}>
                                        <button
@@ -147,6 +231,9 @@ const MainApp: React.FC = () => {
                                    </li>
                                ))}
                            </ul>
+                           ) : (
+                             <p className="px-2 py-4 text-center text-sm text-text-secondary">No spaces found.</p>
+                           )}
                         </div>
                     </div>
                 )}
@@ -164,31 +251,7 @@ const MainApp: React.FC = () => {
         </div>
       </header>
       
-      <main className="flex-1 relative">
-        {/* Notes View Container */}
-        <div
-          className={`absolute inset-0 transition-opacity duration-500 ease-in-out h-full w-full
-            ${activeView === 'notes' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`
-          }
-        >
-          <div className="h-full overflow-y-auto p-4 md:p-8">
-            <NotesView space={activeSpace} />
-          </div>
-        </div>
-
-        {/* Chat View Container */}
-        <div
-          className={`absolute inset-0 transition-opacity duration-500 ease-in-out h-full w-full
-            ${activeView === 'chat' ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}`
-          }
-        >
-          <ChatView 
-            space={activeSpace}
-            isSidebarOpen={isSidebarOpen}
-            setIsSidebarOpen={setIsSidebarOpen}
-          />
-        </div>
-      </main>
+      {renderContent()}
     </div>
   );
 };

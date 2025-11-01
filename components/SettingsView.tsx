@@ -1,8 +1,9 @@
-
 import React, { useContext, useState, useEffect } from 'react';
 import { SettingsContext } from '../contexts/SettingsContext';
-import type { AiProvider, AiModel } from '../services/aiService';
+import type { AiProvider } from '../services/aiService';
+import type { AiModel } from '../services/aiService';
 import * as aiService from '../services/aiService';
+import * as anytypeService from '../services/anytypeService';
 import GemIcon from './icons/GemIcon';
 import OpenAIIcon from './icons/OpenAIIcon';
 import AnthropicIcon from './icons/AnthropicIcon';
@@ -25,7 +26,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
       aiProvider, setAiProvider,
       aiApiKey, setAiApiKey,
       aiModel, setAiModel,
-      anytypeApiKey, setAnytypeApiKey,
       anytypeApiEndpoint, setAnytypeApiEndpoint,
       resetConfiguration
   } = useContext(SettingsContext);
@@ -34,21 +34,21 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const [currentProvider, setCurrentProvider] = useState<AiProvider>(aiProvider || 'gemini');
   const [currentAiKey, setCurrentAiKey] = useState(aiApiKey);
   const [selectedModelId, setSelectedModelId] = useState(aiModel);
-  const [currentAnytypeKey, setCurrentAnytypeKey] = useState(anytypeApiKey);
   const [currentAnytypeEndpoint, setCurrentAnytypeEndpoint] = useState(anytypeApiEndpoint);
 
   // Local UI state
-  const [validationState, setValidationState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
+  const [anytypeValidationState, setAnytypeValidationState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
+  const [aiValidationState, setAiValidationState] = useState<'idle' | 'validating' | 'valid' | 'invalid'>('idle');
   const [availableModels, setAvailableModels] = useState<AiModel[]>([]);
 
-  // Effect to load models if a key already exists
+  // Effect to load models and validate keys if they already exist
   useEffect(() => {
     if (aiApiKey && aiProvider) {
-      setValidationState('valid');
-      handleVerifyKey(aiProvider, aiApiKey, true); // silent verify to get models
-    } else {
-      setValidationState('idle');
-      setAvailableModels([]);
+      setAiValidationState('valid');
+      handleVerifyAiKey(aiProvider, aiApiKey, true); // silent verify to get models
+    }
+    if(anytypeApiEndpoint) {
+        setAnytypeValidationState('valid');
     }
   }, []);
 
@@ -60,36 +60,44 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     setCurrentProvider(provider);
     setCurrentAiKey('');
     setSelectedModelId('');
-    setValidationState('idle');
+    setAiValidationState('idle');
     setAvailableModels([]);
   };
 
-  const handleVerifyKey = async (provider: AiProvider, key: string, silent = false) => {
+  const handleVerifyAnytype = async () => {
+    if (!currentAnytypeEndpoint.trim()) return;
+    setAnytypeValidationState('validating');
+    const isValid = await anytypeService.validateAnytypeApi(currentAnytypeEndpoint);
+    setAnytypeValidationState(isValid ? 'valid' : 'invalid');
+  };
+
+  const handleVerifyAiKey = async (provider: AiProvider, key: string, silent = false) => {
     if (!key.trim()) return;
-    if (!silent) setValidationState('validating');
+    if (!silent) setAiValidationState('validating');
     
     const isValid = await aiService.validateApiKey(provider, key);
     if (isValid) {
-      setValidationState('valid');
+      setAiValidationState('valid');
       const models = await aiService.listModels(provider, key);
       setAvailableModels(models);
       if (models.length > 0 && !models.some(m => m.id === selectedModelId)) {
         setSelectedModelId(models[0].id);
       }
     } else {
-      setValidationState('invalid');
+      setAiValidationState('invalid');
       setAvailableModels([]);
     }
   };
-  
+
   const handleSaveChanges = () => {
-    if (validationState === 'valid' || currentAiKey === '') {
+    if (aiValidationState === 'valid' || currentAiKey === '') {
       setAiProvider(currentProvider);
       setAiApiKey(currentAiKey);
       setAiModel(selectedModelId);
     }
-    setAnytypeApiKey(currentAnytypeKey);
-    setAnytypeApiEndpoint(currentAnytypeEndpoint);
+    if (anytypeValidationState === 'valid' || currentAnytypeEndpoint === '') {
+        setAnytypeApiEndpoint(currentAnytypeEndpoint);
+    }
     onBack();
   };
   
@@ -132,6 +140,32 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 </div>
               </div>
             </section>
+
+            {/* Anytype Data Management Section */}
+            <section>
+                <h2 className="font-semibold text-xs text-text-secondary uppercase tracking-wider mb-3">Anytype Local Connection</h2>
+                <div className="bg-ui-background rounded-lg p-4 space-y-4">
+                    <p className="text-sm text-text-secondary">Connect to the local server script to get a live view of your Anytype data. See `anytype-local-server.js` for instructions.</p>
+                    <div>
+                        <label className="text-sm font-medium text-text-primary" htmlFor="anytype-endpoint">Endpoint</label>
+                        <div className="flex items-center space-x-2 mt-1">
+                            <input
+                                id="anytype-endpoint"
+                                type="text"
+                                value={currentAnytypeEndpoint}
+                                onChange={e => { setCurrentAnytypeEndpoint(e.target.value); setAnytypeValidationState('idle'); }}
+                                placeholder="e.g., http://localhost:3456"
+                                className="w-full text-sm p-2 bg-background rounded-md border border-border focus:ring-1 focus:ring-brand-primary"
+                            />
+                            <button onClick={handleVerifyAnytype} disabled={!currentAnytypeEndpoint || anytypeValidationState === 'validating'} className="p-2 text-sm font-semibold bg-border rounded-md hover:bg-text-secondary/20 disabled:opacity-50">
+                                {anytypeValidationState === 'validating' ? <LoaderIcon className="h-5 w-5" /> : 'Verify'}
+                            </button>
+                        </div>
+                        {anytypeValidationState === 'invalid' && <p className="text-red-500 text-xs mt-1">Could not connect. Is the local server script running?</p>}
+                        {anytypeValidationState === 'valid' && <p className="text-green-500 text-xs mt-1">Connection successful.</p>}
+                    </div>
+                </div>
+            </section>
             
             {/* AI Provider Section */}
             <section>
@@ -148,16 +182,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 <div>
                   <label className="text-sm font-medium text-text-primary" htmlFor="ai-key">API Key</label>
                   <div className="flex items-center space-x-2 mt-1">
-                    <input id="ai-key" type="password" value={currentAiKey} onChange={e => { setCurrentAiKey(e.target.value); setValidationState('idle'); }} placeholder="Your API Key" className="w-full text-sm p-2 bg-background rounded-md border border-border focus:ring-1 focus:ring-brand-primary"/>
-                    <button onClick={() => handleVerifyKey(currentProvider, currentAiKey)} disabled={!currentAiKey || validationState === 'validating'} className="p-2 text-sm font-semibold bg-border rounded-md hover:bg-text-secondary/20 disabled:opacity-50">
-                      {validationState === 'validating' ? <LoaderIcon className="h-5 w-5" /> : 'Verify'}
+                    <input id="ai-key" type="password" value={currentAiKey} onChange={e => { setCurrentAiKey(e.target.value); setAiValidationState('idle'); }} placeholder="Your API Key" className="w-full text-sm p-2 bg-background rounded-md border border-border focus:ring-1 focus:ring-brand-primary"/>
+                    <button onClick={() => handleVerifyAiKey(currentProvider, currentAiKey)} disabled={!currentAiKey || aiValidationState === 'validating'} className="p-2 text-sm font-semibold bg-border rounded-md hover:bg-text-secondary/20 disabled:opacity-50">
+                      {aiValidationState === 'validating' ? <LoaderIcon className="h-5 w-5" /> : 'Verify'}
                     </button>
                   </div>
-                  {validationState === 'invalid' && <p className="text-red-500 text-xs mt-1">Invalid API key.</p>}
-                  {validationState === 'valid' && <p className="text-green-500 text-xs mt-1">API Key is valid.</p>}
+                  {aiValidationState === 'invalid' && <p className="text-red-500 text-xs mt-1">Invalid API key.</p>}
+                  {aiValidationState === 'valid' && <p className="text-green-500 text-xs mt-1">API Key is valid.</p>}
                 </div>
 
-                {validationState === 'valid' && availableModels.length > 0 && (
+                {aiValidationState === 'valid' && availableModels.length > 0 && (
                   <div className="animate-fade-in-up">
                     <label className="text-sm font-medium text-text-primary" htmlFor="ai-model">Model</label>
                      <select id="ai-model" value={selectedModelId} onChange={e => setSelectedModelId(e.target.value)} className="w-full text-sm mt-1 p-2 bg-background rounded-md border border-border focus:ring-1 focus:ring-brand-primary">
@@ -167,27 +201,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
                 )}
               </div>
             </section>
-
-            {/* Anytype Section */}
-            <section>
-              <h2 className="font-semibold text-xs text-text-secondary uppercase tracking-wider mb-3">Anytype API (Optional)</h2>
-              <div className="bg-ui-background rounded-lg p-4 space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-text-primary" htmlFor="anytype-endpoint">Endpoint</label>
-                  <input id="anytype-endpoint" type="text" value={currentAnytypeEndpoint} onChange={e => setCurrentAnytypeEndpoint(e.target.value)} placeholder="API Endpoint" className="w-full text-sm mt-1 p-2 bg-background rounded-md border border-border focus:ring-1 focus:ring-brand-primary"/>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-text-primary" htmlFor="anytype-key">API Key</label>
-                  <input id="anytype-key" type="password" value={currentAnytypeKey} onChange={e => setCurrentAnytypeKey(e.target.value)} placeholder="Anytype API Key" className="w-full text-sm mt-1 p-2 bg-background rounded-md border border-border focus:ring-1 focus:ring-brand-primary"/>
-                </div>
-              </div>
-            </section>
             
             {/* Actions */}
             <section className="sticky bottom-0 py-4 bg-background">
               <div className="max-w-3xl mx-auto space-y-3">
                   <button onClick={handleSaveChanges} className="w-full p-3 text-sm bg-brand-primary text-white font-semibold rounded-md hover:bg-brand-secondary transition-colors">
-                      Save Changes
+                      Save Changes & Go Back
                   </button>
                   <button onClick={handleReset} className="w-full text-center p-3 text-sm bg-red-500/10 text-red-500 border border-red-500/20 rounded-md hover:bg-red-500/20 transition-colors duration-200 font-semibold">
                       Reset All Configuration
