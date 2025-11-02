@@ -236,6 +236,12 @@ export async function fetchObjects(apiEndpoint: string, spaceId: string, apiKey?
       return [];
     }
 
+    // 诊断：打印第一个对象的完整结构
+    if (objectsArray.length > 0) {
+      console.log('📊 First object from list API (full structure):');
+      console.log(JSON.stringify(objectsArray[0], null, 2).substring(0, 1000));
+    }
+
     const transformedObjects: AnyObject[] = objectsArray
       .map(transformAnyObject)
       .filter((obj): obj is AnyObject => obj !== null);
@@ -474,6 +480,12 @@ function transformAnyObject(rawObject: any): AnyObject | null {
     return null;
   }
 
+  // 诊断日志：检查关键字段
+  console.log(`🔄 Transform object "${actualObject.name}"`);
+  console.log(`   Has links: ${!!actualObject.links}, Has body: ${!!actualObject.body}`);
+  console.log(`   Links value: ${actualObject.links ? JSON.stringify(actualObject.links).substring(0, 100) : 'undefined'}`);
+  console.log(`   Body value: ${actualObject.body ? actualObject.body.substring(0, 100) : 'undefined'}`);
+
   // Convert properties array to relations object
   const relations: Record<string, Relation> = {};
   if (Array.isArray(actualObject.properties)) {
@@ -509,39 +521,86 @@ function transformAnyObject(rawObject: any): AnyObject | null {
     });
   }
 
+  // 获取links数组 - 这是对象关系的关键字段
+  const links: string[] = Array.isArray(actualObject.links) ? actualObject.links : [];
+
+  const children = parseChildrenFromBody(actualObject.body);
+
+  console.log(`   ✅ After transform: links=${links.length}, children=${children.length}`);
+
   return {
     id: actualObject.id,
     name: actualObject.name,
     relations,
-    children: parseChildrenFromBody(actualObject.body),
+    children,
+    links, // 添加links字段用于树结构构建
   };
 }
 
 /**
  * 从对象的body中解析子对象ID
+ * 支持两种嵌入方式：
+ * 1. 直接的对象块 (type === 'object')
+ * 2. Dataview块 (type === 'dataview') - 包含targetObjectId
+ * 3. Link块 (type === 'link') - 包含targetBlockId
  */
 function parseChildrenFromBody(body?: string): string[] {
-  if (!body) return [];
+  if (!body) {
+    console.log('📦 parseChildrenFromBody: body is empty/undefined');
+    return [];
+  }
+  
+  console.log('📦 parseChildrenFromBody called with body:', body.substring(0, 200));
   
   try {
     const bodyData = JSON.parse(body);
-    console.log('Parsed body data:', bodyData);
+    console.log('📦 Parsed body data:', bodyData);
     
     // 假设body是blocks数组
     if (Array.isArray(bodyData)) {
       const childIds: string[] = [];
+      
       for (const block of bodyData) {
-        // 查找对象引用block
+        if (!block) continue;
+
+        console.log(`🔍 Block type: ${block.type}, content:`, block.content);
+
+        // 1. 直接的对象块
         if (block.type === 'object' && block.content?.objectId) {
+          console.log(`✅ Found object block with objectId: ${block.content.objectId}`);
           childIds.push(block.content.objectId);
-        } else if (block.content?.text) {
-          // 从文本中提取对象引用，如[[object-id]]
+        }
+        
+        // 2. Dataview块 - 这是Collection/Set对象的引用！
+        // 参考Anytype源码 BlockDataview，它有content中的targetObjectId或block.getTargetObjectId()
+        else if (block.type === 'dataview' && block.content) {
+          // Dataview可能有targetObjectId直接在content中
+          if (block.content.targetObjectId) {
+            console.log(`✅ Found dataview block with targetObjectId: ${block.content.targetObjectId}`);
+            childIds.push(block.content.targetObjectId);
+          }
+          // 或者通过fields.targetObjectId
+          else if (block.fields?.targetObjectId) {
+            console.log(`✅ Found dataview block with fields.targetObjectId: ${block.fields.targetObjectId}`);
+            childIds.push(block.fields.targetObjectId);
+          }
+        }
+        
+        // 3. Link块 - 链接到另一个对象
+        else if (block.type === 'link' && block.content?.targetBlockId) {
+          console.log(`✅ Found link block with targetBlockId: ${block.content.targetBlockId}`);
+          childIds.push(block.content.targetBlockId);
+        }
+        
+        // 4. 从文本块中提取内联对象引用
+        else if (block.content?.text) {
           const matches = block.content.text.match(/\[\[([^\]]+)\]\]/g);
           if (matches) {
             for (const match of matches) {
               const objectId = match.slice(2, -2); // 移除[[ ]]
-              // 假设是对象ID，如果不是则跳过
-              if (objectId.match(/^[a-zA-Z0-9_-]+$/)) {
+              // 假设是对象ID
+              if (objectId && objectId.match(/^[a-zA-Z0-9_-]+$/)) {
+                console.log(`✅ Found inline object reference: ${objectId}`);
                 childIds.push(objectId);
               }
             }
@@ -549,11 +608,11 @@ function parseChildrenFromBody(body?: string): string[] {
         }
       }
       
-      console.log('Found child IDs:', childIds);
+      console.log('✅ Total child IDs found from body:', childIds);
       return childIds;
     }
   } catch (error) {
-    console.error('Failed to parse body:', error);
+    console.error('❌ Failed to parse body:', error);
   }
   
   return [];

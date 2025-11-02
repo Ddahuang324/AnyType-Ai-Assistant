@@ -4,6 +4,7 @@ import { SettingsContext } from '../contexts/SettingsContext';
 import { useObject } from '../hooks/useObject';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import LoaderIcon from './icons/LoaderIcon';
+import ObjectTree from './ObjectTree';
 
 interface ObjectDetailProps {
   space: Space;
@@ -105,23 +106,17 @@ const ObjectDetail: React.FC<ObjectDetailProps> = ({ space, objectId, onBack }) 
             </div>
           )}
 
-          {/* Children */}
-          {object.children && object.children.length > 0 && (
-            <div>
-              <h2 className="text-xl font-semibold text-text-primary mb-4">子对象</h2>
-              <div className="space-y-2">
-                {object.children.map((child) => (
-                  <div
-                    key={child.id}
-                    className="p-3 bg-ui-hover-background rounded border border-border"
-                  >
-                    <p className="text-text-primary font-medium">{child.name}</p>
-                    <p className="text-text-secondary text-sm">ID: {child.id}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Object Relations Tree */}
+          <div>
+            <h2 className="text-xl font-semibold text-text-primary mb-4">对象关系树 - 基于Links字段</h2>
+            <p className="text-text-secondary text-sm mb-3">显示该对象及其所有关联对象的树状结构</p>
+            <ObjectTree
+              space={space}
+              rootObjectId={objectId}
+              apiEndpoint={anytypeApiEndpoint}
+              apiKey={anytypeApiKey}
+            />
+          </div>
         </div>
       </div>
     </div>

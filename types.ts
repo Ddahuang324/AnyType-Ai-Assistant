@@ -7,6 +7,7 @@ export interface AnyObject {
   name: string;
   relations: Record<string, Relation>;
   children?: string[]; // 改为string[]，存储子对象ID
+  links?: string[]; // 对象链接/关系数组（来自API）
 }
 
 // Defines the configuration for rendering a table column (a "Relation").
