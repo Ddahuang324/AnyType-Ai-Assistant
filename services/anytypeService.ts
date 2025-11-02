@@ -268,7 +268,8 @@ export async function getObject(apiEndpoint: string, spaceId: string, objectId: 
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
-    const response = await fetch(`${normalizedEndpoint}/v1/spaces/${spaceId}/objects/${objectId}`, {
+    // 获取对象的完整信息，包括body
+    const response = await fetch(`${normalizedEndpoint}/v1/spaces/${spaceId}/objects/${objectId}?format=json`, {
       method: 'GET',
       headers,
     });
@@ -278,6 +279,7 @@ export async function getObject(apiEndpoint: string, spaceId: string, objectId: 
     }
 
     const rawObject: AnytypeObjectResponse = await response.json();
+    console.log('Raw object with body:', rawObject);
     return transformAnyObject(rawObject);
   } catch (error) {
     console.error(`Error fetching object ${objectId}:`, error);
@@ -463,16 +465,19 @@ export async function searchObjects(apiEndpoint: string, spaceId: string, query:
 /**
  * A helper function to transform raw API objects into the application's AnyObject type.
  */
-function transformAnyObject(rawObject: AnytypeObjectResponse): AnyObject | null {
-  if (!rawObject || typeof rawObject.id !== 'string' || typeof rawObject.name !== 'string') {
+function transformAnyObject(rawObject: any): AnyObject | null {
+  // Handle nested object structure from API
+  const actualObject = (rawObject.object && typeof rawObject.object === 'object') ? rawObject.object : rawObject;
+  
+  if (!actualObject || typeof actualObject.id !== 'string' || typeof actualObject.name !== 'string') {
     console.warn('Skipping invalid object in data:', rawObject);
     return null;
   }
 
   // Convert properties array to relations object
   const relations: Record<string, Relation> = {};
-  if (Array.isArray(rawObject.properties)) {
-    rawObject.properties.forEach(prop => {
+  if (Array.isArray(actualObject.properties)) {
+    actualObject.properties.forEach(prop => {
       if (prop && prop.key && typeof prop.key === 'string') {
         // Handle different property formats
         if (prop.text !== undefined) {
@@ -505,11 +510,53 @@ function transformAnyObject(rawObject: AnytypeObjectResponse): AnyObject | null 
   }
 
   return {
-    id: rawObject.id,
-    name: rawObject.name,
+    id: actualObject.id,
+    name: actualObject.name,
     relations,
-    children: [], // Anytype API doesn't return nested children in list response
+    children: parseChildrenFromBody(actualObject.body),
   };
+}
+
+/**
+ * 从对象的body中解析子对象ID
+ */
+function parseChildrenFromBody(body?: string): string[] {
+  if (!body) return [];
+  
+  try {
+    const bodyData = JSON.parse(body);
+    console.log('Parsed body data:', bodyData);
+    
+    // 假设body是blocks数组
+    if (Array.isArray(bodyData)) {
+      const childIds: string[] = [];
+      for (const block of bodyData) {
+        // 查找对象引用block
+        if (block.type === 'object' && block.content?.objectId) {
+          childIds.push(block.content.objectId);
+        } else if (block.content?.text) {
+          // 从文本中提取对象引用，如[[object-id]]
+          const matches = block.content.text.match(/\[\[([^\]]+)\]\]/g);
+          if (matches) {
+            for (const match of matches) {
+              const objectId = match.slice(2, -2); // 移除[[ ]]
+              // 假设是对象ID，如果不是则跳过
+              if (objectId.match(/^[a-zA-Z0-9_-]+$/)) {
+                childIds.push(objectId);
+              }
+            }
+          }
+        }
+      }
+      
+      console.log('Found child IDs:', childIds);
+      return childIds;
+    }
+  } catch (error) {
+    console.error('Failed to parse body:', error);
+  }
+  
+  return [];
 }
 
 /**

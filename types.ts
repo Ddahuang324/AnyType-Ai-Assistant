@@ -6,7 +6,7 @@ export interface AnyObject {
   id: string;
   name: string;
   relations: Record<string, Relation>;
-  children?: AnyObject[]; // Allows objects to be nested
+  children?: string[]; // 改为string[]，存储子对象ID
 }
 
 // Defines the configuration for rendering a table column (a "Relation").
