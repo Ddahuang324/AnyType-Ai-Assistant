@@ -1,4 +1,4 @@
-import type { Space, Project, ObjectSet, AnyObject, RelationConfig, AnytypeObjectResponse, AnytypeObjectsListResponse } from '../types';
+import type { Space, Project, ObjectSet, AnyObject, Relation, RelationConfig, AnytypeObjectResponse, AnytypeObjectsListResponse } from '../types';
 
 /**
  * Anytype API Service
@@ -423,9 +423,18 @@ export async function searchObjects(apiEndpoint: string, spaceId: string, query:
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
 
-    const response = await fetch(`${normalizedEndpoint}/v1/spaces/${spaceId}/search?q=${encodeURIComponent(query)}`, {
-      method: 'GET',
+    const requestBody = {
+      query: query || "",
+      sort: {
+        property_key: "last_modified_date",
+        direction: "desc"
+      }
+    };
+
+    const response = await fetch(`${normalizedEndpoint}/v1/spaces/${spaceId}/search?offset=0&limit=100`, {
+      method: 'POST',
       headers,
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -460,10 +469,45 @@ function transformAnyObject(rawObject: AnytypeObjectResponse): AnyObject | null 
     return null;
   }
 
+  // Convert properties array to relations object
+  const relations: Record<string, Relation> = {};
+  if (Array.isArray(rawObject.properties)) {
+    rawObject.properties.forEach(prop => {
+      if (prop && prop.key && typeof prop.key === 'string') {
+        // Handle different property formats
+        if (prop.text !== undefined) {
+          relations[prop.key] = prop.text;
+        } else if (prop.number !== undefined) {
+          relations[prop.key] = prop.number;
+        } else if (prop.checkbox !== undefined) {
+          relations[prop.key] = prop.checkbox;
+        } else if (prop.select) {
+          relations[prop.key] = prop.select.name || prop.select.id;
+        } else if (prop.multi_select) {
+          relations[prop.key] = prop.multi_select.map(item => item.name || item.id);
+        } else if (prop.date) {
+          relations[prop.key] = prop.date;
+        } else if (prop.files) {
+          relations[prop.key] = prop.files;
+        } else if (prop.url) {
+          relations[prop.key] = prop.url;
+        } else if (prop.email) {
+          relations[prop.key] = prop.email;
+        } else if (prop.phone) {
+          relations[prop.key] = prop.phone;
+        } else if (prop.objects) {
+          relations[prop.key] = prop.objects;
+        } else {
+          relations[prop.key] = null;
+        }
+      }
+    });
+  }
+
   return {
     id: rawObject.id,
     name: rawObject.name,
-    relations: rawObject.properties || {},
+    relations,
     children: [], // Anytype API doesn't return nested children in list response
   };
 }

@@ -78,7 +78,7 @@ export interface AnytypeObjectResponse {
   type?: string;
   created_at?: string;
   updated_at?: string;
-  properties?: Record<string, any>;
+  properties?: any[]; // Array of properties from search API
   body?: string;
 }
 
